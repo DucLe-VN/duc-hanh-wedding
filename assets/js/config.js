@@ -75,7 +75,6 @@ const CONFIG = {
                en: "Together, we have written the most beautiful chapters of our love story. Every day by your side has been a gift, filled with happiness and memories that I will cherish forever." },
       imgs:  ["assets/images/love/love-01.jpg", 
               "assets/images/love/love-02.jpg", 
-              "assets/images/love/love-03.jpg", 
               "assets/images/love/love-06.jpg", 
               "assets/images/love/love-07.jpg", 
               "assets/images/love/love-08.jpg", 
