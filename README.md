@@ -87,6 +87,18 @@ Spaces/Vietnamese are auto-encoded. Example encoded link:
 
 > 💡 The language button (top-right, **VI/EN**) lets guests switch language.
 
+## 🖼️ Photos
+
+Original photos live in `raw/images/` (git-ignored — keep a backup). The site
+serves resized WebP copies (480 / 960 / 1440 / 2048 px wide) and picks the
+smallest one that stays sharp on the guest's screen, loading slideshow photos
+only when they are about to be shown. To add or replace a photo:
+
+1. Put the original in `raw/images/<folder>/` (JPG, PNG or iPhone HEIC).
+2. Run `npm install` (first time only), then `npm run images`.
+3. In `config.js`, refer to it by its original name, e.g.
+   `"assets/images/love/love-05.jpg"`.
+
 ## 🎵 Music (optional)
 
 Drop `assets/music/background.mp3`. Until then the site plays an online sample

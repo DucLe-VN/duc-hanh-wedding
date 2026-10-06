@@ -8,6 +8,38 @@
   const $  = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
+  /* ---- Responsive images ----
+     config.js keeps the original paths (…/pre-01.jpg); tools/optimize-images.js
+     writes WebP copies (…/pre-01-480.webp, -960, -1440, -2048) and the manifest
+     in images.js. We pick the smallest copy that still covers the box sharply. */
+  const IMG = window.IMAGE_MANIFEST || {};
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const imgInfo = (src) => IMG[String(src).toLowerCase()];
+  const variant = (src, w) => String(src).toLowerCase().replace(/\.[a-z0-9]+$/, `-${w}.webp`);
+
+  // Image URL for a `background-size:cover` box of boxW × boxH CSS pixels
+  function pickSrc(src, boxW, boxH) {
+    const info = imgInfo(src);
+    if (!info) return src;
+    const need = Math.max(boxW, boxH * (info.w / info.h)) * DPR * 1.1;   // +10% for Ken Burns zoom
+    const w = info.s.find((x) => x >= need * 0.9) || info.s[info.s.length - 1];
+    return variant(src, w);
+  }
+  // srcset for <img> (the browser picks by its own width + pixel density)
+  function srcsetAttr(src) {
+    const info = imgInfo(src);
+    return info ? info.s.map((w) => `${variant(src, w)} ${w}w`).join(", ") : "";
+  }
+  // Background slides store their image in data-src and only load it when needed
+  function loadBg(el) {
+    if (!el || el.dataset.loaded) return;
+    el.dataset.loaded = "1";
+    const r = el.getBoundingClientRect();
+    const w = r.width || el.parentElement.clientWidth || window.innerWidth;
+    const h = r.height || el.parentElement.clientHeight || window.innerHeight;
+    el.style.backgroundImage = `url("${pickSrc(el.dataset.src, w, h)}")`;
+  }
+
   /* ---- Language state ---- */
   let lang = "vi";                       // 'vi' | 'en'
   const t = (o) => (o && (o[lang] ?? o.vi)) || "";
@@ -111,10 +143,15 @@
       const alt = escapeHtml(t(it.title));
       let photo = "";
       if (imgs.length === 1) {
-        photo = `<div class="tl-photo"><img src="${imgs[0]}" alt="${alt}" loading="lazy"></div>`;
+        const info = imgInfo(imgs[0]);
+        const set = srcsetAttr(imgs[0]);
+        photo = `<div class="tl-photo"><img src="${info ? variant(imgs[0], info.s[Math.min(1, info.s.length - 1)]) : imgs[0]}"` +
+          (set ? ` srcset="${set}" sizes="(max-width:720px) 92vw, 440px"` : "") +
+          (info ? ` width="${info.w}" height="${info.h}"` : "") +
+          ` alt="${alt}" loading="lazy" decoding="async"></div>`;
       } else if (imgs.length > 1) {
         const slides = imgs.map((src, k) =>
-          `<div class="tl-slide${k === 0 ? " active" : ""}" role="img" aria-label="${alt}" style="background-image:url('${src}')"></div>`).join("");
+          `<div class="tl-slide${k === 0 ? " active" : ""}" role="img" aria-label="${alt}" data-src="${src}"></div>`).join("");
         const dots = imgs.map((_, k) =>
           `<button class="${k === 0 ? "active" : ""}" data-i="${k}" aria-label="ảnh ${k + 1}"></button>`).join("");
         photo = `<div class="tl-slider">${slides}<div class="tl-dots">${dots}</div></div>`;
@@ -147,6 +184,7 @@
     const go = (n) => {
       slides[idx].classList.remove("active"); dots[idx].classList.remove("active");
       idx = (n + slides.length) % slides.length;
+      loadBg(slides[idx]); loadBg(slides[(idx + 1) % slides.length]);   // current + preload next
       slides[idx].classList.add("active"); dots[idx].classList.add("active");
     };
     const auto = () => { clearInterval(timer); timer = setInterval(() => go(idx + 1), 3500); };
@@ -157,7 +195,16 @@
       const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
       if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { go(idx + (dx < 0 ? 1 : -1)); auto(); }
     }, { passive: true });
-    auto();
+    // Start loading/cycling only when the card is about to scroll into view
+    whenNear(slider, () => { go(idx); auto(); });
+  }
+
+  function whenNear(el, fn) {
+    if (!("IntersectionObserver" in window)) return fn();
+    const ob = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { ob.disconnect(); fn(); }
+    }, { rootMargin: "400px 0px" });
+    ob.observe(el);
   }
 
   // Poem HTML, embedded inside the 2nd love-story card
@@ -330,15 +377,19 @@
     C.heroImages.forEach((src, i) => {
       const s = document.createElement("div");
       s.className = "slide" + (i === 0 ? " active" : "");
-      s.style.backgroundImage = `url("${src}")`;
+      s.dataset.src = src;
       stage.appendChild(s);
     });
     const slides = $$(".slide", stage);
+    loadBg(slides[0]);
     if (slides.length < 2) return;
+    // Preload the 2nd slide once the page has finished loading
+    window.addEventListener("load", () => loadBg(slides[1]), { once: true });
     let idx = 0;
     setInterval(() => {
       slides[idx].classList.remove("active");
       idx = (idx + 1) % slides.length;
+      loadBg(slides[idx]); loadBg(slides[(idx + 1) % slides.length]);
       slides[idx].classList.add("active");
     }, 7500);
   }
@@ -351,7 +402,7 @@
     const dots = $("#gallery-dots");
     const imgs = C.gallery.images;
     track.innerHTML = imgs.map((src, i) =>
-      `<div class="g-slide${i === 0 ? " active" : ""}" style="background-image:url('${src}')"></div>`).join("");
+      `<div class="g-slide${i === 0 ? " active" : ""}" data-src="${src}"></div>`).join("");
     dots.innerHTML = imgs.map((_, i) =>
       `<button class="${i === 0 ? "active" : ""}" data-i="${i}" aria-label="slide ${i + 1}"></button>`).join("");
     const slides = $$(".g-slide", track);
@@ -361,6 +412,9 @@
       slides[idx].classList.remove("active");
       dotEls[idx].classList.remove("active");
       idx = (n + slides.length) % slides.length;
+      loadBg(slides[idx]);
+      loadBg(slides[(idx + 1) % slides.length]);                       // preload next
+      loadBg(slides[(idx - 1 + slides.length) % slides.length]);       // and previous (swipe back)
       slides[idx].classList.add("active");
       dotEls[idx].classList.add("active");
     }
@@ -376,7 +430,7 @@
       const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
       if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) { dx < 0 ? next() : go(idx - 1); auto(); }
     }, { passive: true });
-    auto();
+    whenNear(track, () => { go(idx); auto(); });
   }
 
   /* ================================================================
