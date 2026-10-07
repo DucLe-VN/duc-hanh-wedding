@@ -339,11 +339,7 @@ img{ max-width:100%; display:block; }
   position:absolute;
   inset:0;
   z-index:1;
-  background:linear-gradient(
-    var(--color-overlay),
-    var(--color-overlay) 55%,
-    var(--color-overlay)
-  );
+  background:transparent;
 }
 
 .hero-inner{
